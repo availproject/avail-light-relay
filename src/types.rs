@@ -23,16 +23,19 @@ pub struct RuntimeConfig {
     pub libp2p_port: u16,
     /// Sets libp2p application-specific version of the protocol family used by the peer. (default: "/avail_kad/id/1.0.0")
     pub libp2p_identify_protocol: String,
+    /// Sets libp2p agent version that is sent to peers. (default: "avail-light-client/rust-client")
+    pub libp2p_identify_agent: String,
 }
 
 impl Default for RuntimeConfig {
     fn default() -> Self {
         RuntimeConfig {
-            log_level: "INFO".to_owned(),
+            log_level: "INFO".to_string(),
             log_format_json: false,
             secret_key: None,
             libp2p_port: 37000,
-            libp2p_identify_protocol: "/avail_kad/id/1.0.0".to_owned(),
+            libp2p_identify_protocol: "/avail_kad/id/1.0.0".to_string(),
+            libp2p_identify_agent: "avail-light-client/rust-client".to_string(),
         }
     }
 }

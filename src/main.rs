@@ -98,17 +98,21 @@ fn build_transport(id_keys: Keypair) -> Boxed<(PeerId, StreamMuxerBox)> {
         .boxed()
 }
 
-fn create_swarm(id_keys: Keypair, protocol_version: String) -> Swarm<Behaviour> {
+fn create_swarm(
+    id_keys: Keypair,
+    protocol_version: String,
+    agent_version: String,
+) -> Swarm<Behaviour> {
     let local_peer_id = PeerId::from(id_keys.public());
     info!("Local peer id: {:?}.", local_peer_id,);
 
     let behaviour = Behaviour {
         relay: relay::Behaviour::new(local_peer_id, Default::default()),
         ping: ping::Behaviour::new(ping::Config::new()),
-        identify: identify::Behaviour::new(identify::Config::new(
-            protocol_version,
-            id_keys.public(),
-        )),
+        identify: identify::Behaviour::new(
+            identify::Config::new(protocol_version, id_keys.public())
+                .with_agent_version(agent_version),
+        ),
     };
 
     SwarmBuilder::with_tokio_executor(build_transport(id_keys), behaviour, local_peer_id).build()
@@ -138,6 +142,7 @@ async fn run() -> Result<()> {
     let mut swarm = create_swarm(
         generate_id_keys(cfg.secret_key)?,
         cfg.libp2p_identify_protocol,
+        cfg.libp2p_identify_agent,
     );
 
     // Listen on all interfaces
