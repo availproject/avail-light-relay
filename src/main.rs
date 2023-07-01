@@ -141,14 +141,14 @@ async fn run() -> Result<()> {
 
     let mut swarm = create_swarm(
         generate_id_keys(cfg.secret_key)?,
-        cfg.libp2p_identify_protocol,
-        cfg.libp2p_identify_agent,
+        cfg.identify_protocol,
+        cfg.identify_agent,
     );
 
     // Listen on all interfaces
     let listen_addr = Multiaddr::empty()
         .with(Protocol::from(Ipv4Addr::UNSPECIFIED))
-        .with(Protocol::Udp(cfg.libp2p_port))
+        .with(Protocol::Udp(cfg.p2p_port))
         .with(Protocol::QuicV1);
     swarm.listen_on(listen_addr)?;
 
