@@ -24,3 +24,28 @@ All participants are identified using their Peer ID, including the relay node, w
 A relay node is identified using a multiaddr that includes the Peer ID of the peer whose traffic is being relayed (the listening peer or “relay target”). With this in mind, we could construct an address that describes a path to the source through some specific relay with selected transport:
 
 ```/ip4/198.51.100.0/tcp/55555/p2p/SomeRelay/p2p-circuit/p2p/SomeDude```
+
+To start a Relay node, run:
+
+```bash
+cargo run -- -c config.yaml  
+```
+
+## Config reference
+```yaml
+# Set the Log Level
+log_level = "info"
+# If set to true, logs are displayed in JSON format, which is used for structured logging. Otherwise, plain text format is used (default: false).
+log_format_json = false
+# Secret key used to generate keypair. Can be either set to `seed` or to `key`.
+# If set to seed, keypair will be generated from that seed.
+# If set to key, a valid ed25519 private key must be provided, else the client will fail
+# If `secret_key` is not set, random seed will be used.
+secret_key = { seed="1" }
+# P2P service port (default: 37000).
+p2p_port = 3700
+# Sets application-specific version of the protocol family used by the peer. (default: "/avail_kad/id/1.0.0")
+identify_protocol = "/avail_kad/id/1.0.0"
+# Sets agent version that is sent to peers. (default: "avail-light-client/rust-client")
+identify_agent = "avail-light-client/rust-client"
+```
