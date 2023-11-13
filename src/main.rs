@@ -138,12 +138,20 @@ async fn run() -> Result<()> {
         cfg.identify_agent,
     )?;
 
-    // Listen on all interfaces
-    let listen_addr = Multiaddr::empty()
-        .with(Protocol::from(Ipv4Addr::UNSPECIFIED))
-        .with(Protocol::Udp(cfg.p2p_port))
-        .with(Protocol::QuicV1);
-    swarm.listen_on(listen_addr)?;
+    // listen on all interfaces on UDP
+    swarm.listen_on(
+        Multiaddr::empty()
+            .with(Protocol::from(Ipv4Addr::UNSPECIFIED))
+            .with(Protocol::Udp(cfg.p2p_port))
+            .with(Protocol::QuicV1),
+    )?;
+
+    // listen on all interfaces on TCP
+    swarm.listen_on(
+        Multiaddr::empty()
+            .with(Protocol::from(Ipv4Addr::UNSPECIFIED))
+            .with(Protocol::Tcp(cfg.p2p_port)),
+    )?;
 
     tokio::spawn(async move {
         loop {

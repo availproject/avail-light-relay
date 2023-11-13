@@ -10,7 +10,7 @@ anyhow = "1.0.71"
 clap = { version = "4.2.7", features = ["derive"] }
 confy = "0.5.1"
 hex = "0.4.3"
-libp2p = { version = "0.53.1", features = ["tokio", "macros", "ping", "identify", "relay", "quic", "dns"] }
+libp2p = { version = "0.53.1", features = ["tokio", "macros", "ping", "identify", "relay", "tcp", "quic", "dns"] }
 multihash = { version = "0.14.0", default-features = false, features = ["blake3", "sha3"] }
 serde = { version = "1.0.163", features = ["derive"] }
 tokio = { version = "1.28.1", features = ["sync", "macros", "rt-multi-thread"] }
