@@ -7,9 +7,9 @@ use libp2p::{
     identify::{self, Info},
     identity::Keypair,
     multiaddr::Protocol,
-    ping, relay,
+    noise, ping, relay,
     swarm::{NetworkBehaviour, SwarmEvent},
-    Multiaddr, PeerId, Swarm, SwarmBuilder,
+    tcp, yamux, Multiaddr, PeerId, Swarm, SwarmBuilder,
 };
 use multihash::{self, Hasher};
 use std::net::Ipv4Addr;
@@ -96,6 +96,11 @@ fn create_swarm(
 
     Ok(SwarmBuilder::with_existing_identity(id_keys)
         .with_tokio()
+        .with_tcp(
+            tcp::Config::default().port_reuse(true).nodelay(true),
+            noise::Config::new,
+            yamux::Config::default,
+        )?
         .with_quic()
         .with_dns()?
         .with_behaviour(|key| Behaviour {
@@ -150,7 +155,7 @@ async fn run() -> Result<()> {
     swarm.listen_on(
         Multiaddr::empty()
             .with(Protocol::from(Ipv4Addr::UNSPECIFIED))
-            .with(Protocol::Tcp(cfg.p2p_port)),
+            .with(Protocol::Tcp(cfg.p2p_port + 1)),
     )?;
 
     tokio::spawn(async move {
