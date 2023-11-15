@@ -1,29 +1,25 @@
 #![doc = include_str!("../README.md")]
 
-use std::net::Ipv4Addr;
-
-use crate::types::RuntimeConfig;
 use anyhow::{Context, Result};
 use clap::Parser;
 use libp2p::{
-    core::{muxing::StreamMuxerBox, transport::Boxed},
     futures::StreamExt,
-    identify::{self, Event as IdentifyEvent, Info},
+    identify::{self, Info},
     identity::Keypair,
     multiaddr::Protocol,
-    ping,
-    quic::{tokio::Transport as QuicTransport, Config as QuicConfig},
-    relay::{self, Event as RelayEvent},
-    swarm::{NetworkBehaviour, SwarmBuilder, SwarmEvent},
-    Multiaddr, PeerId, Swarm, Transport,
+    noise, ping, relay,
+    swarm::{NetworkBehaviour, SwarmEvent},
+    tcp, yamux, Multiaddr, PeerId, Swarm, SwarmBuilder,
 };
 use multihash::{self, Hasher};
+use std::net::Ipv4Addr;
 use tracing::{debug, error, info, metadata::ParseLevelError, warn, Level};
 use tracing_subscriber::{
     fmt::format::{self, DefaultFields, Format, Full, Json},
     FmtSubscriber,
 };
-use types::SecretKey;
+
+use crate::types::{RuntimeConfig, SecretKey};
 
 mod server;
 mod types;
@@ -91,32 +87,32 @@ fn generate_id_keys(secret_key: Option<SecretKey>) -> Result<Keypair> {
     Ok(id_keys)
 }
 
-fn build_transport(id_keys: Keypair) -> Boxed<(PeerId, StreamMuxerBox)> {
-    let mut quic_config = QuicConfig::new(&id_keys);
-    quic_config.support_draft_29 = true;
-    QuicTransport::new(quic_config)
-        .map(|(peer_id, muxer), _| (peer_id, StreamMuxerBox::new(muxer)))
-        .boxed()
-}
-
 fn create_swarm(
     id_keys: Keypair,
     protocol_version: String,
     agent_version: String,
-) -> Swarm<Behaviour> {
+) -> Result<Swarm<Behaviour>> {
     let local_peer_id = PeerId::from(id_keys.public());
     info!("Local peer id: {:?}.", local_peer_id,);
 
-    let behaviour = Behaviour {
-        relay: relay::Behaviour::new(local_peer_id, Default::default()),
-        ping: ping::Behaviour::new(ping::Config::new()),
-        identify: identify::Behaviour::new(
-            identify::Config::new(protocol_version, id_keys.public())
-                .with_agent_version(agent_version),
-        ),
-    };
-
-    SwarmBuilder::with_tokio_executor(build_transport(id_keys), behaviour, local_peer_id).build()
+    Ok(SwarmBuilder::with_existing_identity(id_keys)
+        .with_tokio()
+        .with_tcp(
+            tcp::Config::default().nodelay(true),
+            noise::Config::new,
+            yamux::Config::default,
+        )?
+        .with_quic()
+        .with_dns()?
+        .with_behaviour(|key| Behaviour {
+            relay: relay::Behaviour::new(key.public().to_peer_id(), Default::default()),
+            ping: ping::Behaviour::new(ping::Config::new()),
+            identify: identify::Behaviour::new(
+                identify::Config::new(protocol_version, key.public())
+                    .with_agent_version(agent_version),
+            ),
+        })?
+        .build())
 }
 
 async fn run() -> Result<()> {
@@ -146,14 +142,22 @@ async fn run() -> Result<()> {
         generate_id_keys(cfg.secret_key)?,
         cfg.identify_protocol,
         cfg.identify_agent,
-    );
+    )?;
 
-    // Listen on all interfaces
-    let listen_addr = Multiaddr::empty()
-        .with(Protocol::from(Ipv4Addr::UNSPECIFIED))
-        .with(Protocol::Udp(cfg.p2p_port))
-        .with(Protocol::QuicV1);
-    swarm.listen_on(listen_addr)?;
+    // listen on all interfaces on UDP
+    swarm.listen_on(
+        Multiaddr::empty()
+            .with(Protocol::from(Ipv4Addr::UNSPECIFIED))
+            .with(Protocol::Udp(cfg.p2p_port))
+            .with(Protocol::QuicV1),
+    )?;
+
+    // listen on all interfaces on TCP
+    swarm.listen_on(
+        Multiaddr::empty()
+            .with(Protocol::from(Ipv4Addr::UNSPECIFIED))
+            .with(Protocol::Tcp(cfg.p2p_port + 1)),
+    )?;
 
     tokio::spawn(async move {
         loop {
@@ -163,14 +167,14 @@ async fn run() -> Result<()> {
                 }
 
                 SwarmEvent::Behaviour(BehaviourEvent::Identify(event)) => match event {
-                    IdentifyEvent::Received {
+                    identify::Event::Received {
                         peer_id,
                         info: Info { listen_addrs, .. },
                     } => {
                         debug!("Identity Received from: {peer_id:?} on listen address: {listen_addrs:?}");
                     }
 
-                    IdentifyEvent::Sent { peer_id } => {
+                    identify::Event::Sent { peer_id } => {
                         debug!("Identity Sent event to: {peer_id:?}");
                     }
 
@@ -178,13 +182,13 @@ async fn run() -> Result<()> {
                 },
 
                 SwarmEvent::Behaviour(BehaviourEvent::Relay(event)) => match event {
-                    RelayEvent::ReservationReqAccepted { src_peer_id, .. } => {
+                    relay::Event::ReservationReqAccepted { src_peer_id, .. } => {
                         debug!("Relay accepted reservation request from: {src_peer_id:#?}");
                     }
-                    RelayEvent::ReservationReqDenied { src_peer_id } => {
+                    relay::Event::ReservationReqDenied { src_peer_id } => {
                         debug!("Reservation request was denied for: {src_peer_id:#?}");
                     }
-                    RelayEvent::ReservationTimedOut { src_peer_id } => {
+                    relay::Event::ReservationTimedOut { src_peer_id } => {
                         debug!("Reservation timed out for: {src_peer_id:#?}");
                     }
                     _ => {}
