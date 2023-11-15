@@ -18,7 +18,8 @@ use tracing_subscriber::{
     fmt::format::{self, DefaultFields, Format, Full, Json},
     FmtSubscriber,
 };
-use types::SecretKey;
+
+use crate::types::{RuntimeConfig, SecretKey};
 
 mod server;
 mod types;
