@@ -16,6 +16,7 @@ serde = { version = "1.0.163", features = ["derive"] }
 tokio = { version = "1.28.1", features = ["sync", "macros", "rt-multi-thread"] }
 tracing = "0.1.37"
 tracing-subscriber = { version = "0.3.17", features = ["json"] }
+warp = "0.3.6"
 
 [profile.dev]
 panic = "abort"

@@ -33,6 +33,10 @@ cargo run -- -c config.yaml
 
 ## Config reference
 ```yaml
+# Relay HTTP server host name (default: 127.0.0.1).
+http_server_host = "127.0.0.1"
+# Relay HTTP server port (default: 7701).
+http_server_port = 7701,
 # Set the Log Level
 log_level = "info"
 # If set to true, logs are displayed in JSON format, which is used for structured logging. Otherwise, plain text format is used (default: false).
