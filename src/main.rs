@@ -25,6 +25,7 @@ use tracing_subscriber::{
 };
 use types::SecretKey;
 
+mod server;
 mod types;
 
 #[derive(Debug, Parser)]
@@ -138,6 +139,8 @@ async fn run() -> Result<()> {
     }
 
     info!("Relay node starting ...");
+
+    tokio::spawn(server::run((&cfg).into()));
 
     let mut swarm = create_swarm(
         generate_id_keys(cfg.secret_key)?,
