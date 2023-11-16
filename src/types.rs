@@ -31,6 +31,10 @@ pub struct RuntimeConfig {
     pub identify_protocol: String,
     /// Sets agent version that is sent to peers in the network. (default: "avail-light-client/rust-client")
     pub identify_agent: String,
+    /// OpenTelemetry Collector endpoint (default: http://otelcollector.avail.tools:4317)
+    pub ot_collector_endpoint: String,
+    /// Defines a period of time in which periodic metric dump events will be repeated. (default: 15s)
+    pub metrics_dump_interval: u64,
 }
 
 impl Default for RuntimeConfig {
@@ -44,6 +48,8 @@ impl Default for RuntimeConfig {
             p2p_port: 37000,
             identify_protocol: "/avail_kad/id/1.0.0".to_string(),
             identify_agent: "avail-light-client/rust-client".to_string(),
+            ot_collector_endpoint: "http://otelcollector.avail.tools:4317".to_string(),
+            metrics_dump_interval: 15,
         }
     }
 }
