@@ -1,5 +1,6 @@
 #![doc = include_str!("../README.md")]
-
+use crate::telemetry::{MetricValue, Metrics};
+use crate::types::{RuntimeConfig, SecretKey};
 use anyhow::{Context, Result};
 use clap::Parser;
 use libp2p::{
@@ -13,16 +14,19 @@ use libp2p::{
 };
 use multihash::{self, Hasher};
 use std::net::Ipv4Addr;
+use std::{sync::Arc, time::Duration};
+use tokio::time::{interval_at, Instant};
 use tracing::{debug, error, info, metadata::ParseLevelError, warn, Level};
 use tracing_subscriber::{
     fmt::format::{self, DefaultFields, Format, Full, Json},
     FmtSubscriber,
 };
 
-use crate::types::{RuntimeConfig, SecretKey};
-
 mod server;
+mod telemetry;
 mod types;
+
+const CLIENT_ROLE: &str = "relay_node";
 
 #[derive(Debug, Parser)]
 #[clap(name = "Avail Relay Server")]
@@ -65,26 +69,27 @@ fn default_subscriber(log_lvl: Level) -> FmtSubscriber<DefaultFields, Format<Ful
         .finish()
 }
 
-fn generate_id_keys(secret_key: Option<SecretKey>) -> Result<Keypair> {
-    let id_keys = match secret_key {
-        // if seed was provided, then generate secret key from that seed
+pub fn keypair(secret_key: Option<SecretKey>) -> Result<(Keypair, String)> {
+    let keypair = match secret_key {
+        // if seed is provided, generate secret key from seed
         Some(SecretKey::Seed { seed }) => {
-            let seed_digest = multihash::Sha3_256::digest(seed.as_bytes());
-            Keypair::ed25519_from_bytes(seed_digest)
-                .context("could not generate keypair from seed")?
+            let digest = multihash::Sha3_256::digest(seed.as_bytes());
+            Keypair::ed25519_from_bytes(digest).context("Error generating secret key from seed")?
         }
-        // import provided secret key
+        // import secret key, if provided
         Some(SecretKey::Key { key }) => {
             let mut decoded_key = [0u8; 32];
             hex::decode_to_slice(key.into_bytes(), &mut decoded_key)
-                .context("could not decode secret key from config")?;
-            Keypair::ed25519_from_bytes(decoded_key).context("could not import secret key")?
+                .context("Error decoding secret key from config.")?;
+            Keypair::ed25519_from_bytes(decoded_key).context("Error importing secret key.")?
         }
-        // if neither seed nor secrete key were provided, generate keypair from random seed
+        // if neither seed nor secret key were provided,
+        // generate secret key from random seed
         None => Keypair::generate_ed25519(),
     };
 
-    Ok(id_keys)
+    let peer_id = PeerId::from(keypair.public()).to_string();
+    Ok((keypair, peer_id))
 }
 
 fn create_swarm(
@@ -115,6 +120,18 @@ fn create_swarm(
         .build())
 }
 
+fn find_ip(multiaddress: &Multiaddr) -> Option<String> {
+    multiaddress.iter().find_map(extract_ip)
+}
+
+fn extract_ip(protocol: Protocol) -> Option<String> {
+    match protocol {
+        Protocol::Ip4(ip) => return Some(ip.to_string()),
+        Protocol::Ip6(ip) => return Some(ip.to_string()),
+        _ => None,
+    }
+}
+
 async fn run() -> Result<()> {
     let opts = CliOpts::parse();
     let cfg_path = &opts.config;
@@ -138,11 +155,13 @@ async fn run() -> Result<()> {
 
     tokio::spawn(server::run((&cfg).into()));
 
-    let mut swarm = create_swarm(
-        generate_id_keys(cfg.secret_key)?,
-        cfg.identify_protocol,
-        cfg.identify_agent,
-    )?;
+    let (keypair, peer_id) = keypair(cfg.secret_key)?;
+
+    let ot_metrics =
+        telemetry::otlp::initialize(cfg.ot_collector_endpoint, peer_id, CLIENT_ROLE.into())
+            .context("Cannot initialize OpenTelemetry service.")?;
+
+    let mut swarm = create_swarm(keypair, cfg.identify_protocol, cfg.identify_agent)?;
 
     // listen on all interfaces on UDP
     swarm.listen_on(
@@ -159,19 +178,43 @@ async fn run() -> Result<()> {
             .with(Protocol::Tcp(cfg.p2p_port + 1)),
     )?;
 
+    let ot_metrics = Arc::new(ot_metrics);
+
+    let dump_ot_metrics = ot_metrics.clone();
+    tokio::spawn(async move {
+        let dump_interval = Duration::from_secs(cfg.metrics_dump_interval);
+        let mut interval = interval_at(Instant::now() + dump_interval, dump_interval);
+        loop {
+            interval.tick().await;
+
+            if let Err(error) = dump_ot_metrics.record(MetricValue::HealthCheck()).await {
+                error!("Error recording health check metric: {error}");
+            }
+        }
+    });
+
     tokio::spawn(async move {
         loop {
             match swarm.next().await.expect("Stream to be infinite.") {
                 SwarmEvent::NewListenAddr { address, .. } => {
                     info!("Relay is listening on {address:?}");
-                }
+		},
 
                 SwarmEvent::Behaviour(BehaviourEvent::Identify(event)) => match event {
                     identify::Event::Received {
                         peer_id,
-                        info: Info { listen_addrs, .. },
+                        info: Info { listen_addrs, observed_addr, .. },
                     } => {
                         debug!("Identity Received from: {peer_id:?} on listen address: {listen_addrs:?}");
+
+			let external_addr = observed_addr.to_string();
+
+			if ot_metrics.get_multiaddress().await != external_addr {
+			    ot_metrics.set_multiaddress(external_addr).await;
+			    if let Some(ip) = find_ip(&observed_addr) {
+				ot_metrics.set_ip(ip).await;
+			    };
+			};
                     }
 
                     identify::Event::Sent { peer_id } => {
