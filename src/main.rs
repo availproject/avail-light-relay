@@ -157,9 +157,13 @@ async fn run() -> Result<()> {
 
     let (keypair, peer_id) = keypair(cfg.secret_key)?;
 
-    let ot_metrics =
-        telemetry::otlp::initialize(cfg.ot_collector_endpoint, peer_id, CLIENT_ROLE.into())
-            .context("Cannot initialize OpenTelemetry service.")?;
+    let ot_metrics = telemetry::otlp::initialize(
+        cfg.ot_collector_endpoint,
+        peer_id,
+        CLIENT_ROLE.into(),
+        cfg.origin,
+    )
+    .context("Cannot initialize OpenTelemetry service.")?;
 
     let mut swarm = create_swarm(keypair, cfg.identify_protocol, cfg.identify_agent)?;
 

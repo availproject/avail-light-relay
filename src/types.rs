@@ -35,6 +35,7 @@ pub struct RuntimeConfig {
     pub ot_collector_endpoint: String,
     /// Defines a period of time in which periodic metric dump events will be repeated. (default: 15s)
     pub metrics_dump_interval: u64,
+    pub origin: String,
 }
 
 impl Default for RuntimeConfig {
@@ -50,6 +51,7 @@ impl Default for RuntimeConfig {
             identify_agent: "avail-light-client/rust-client".to_string(),
             ot_collector_endpoint: "http://otelcollector.avail.tools:4317".to_string(),
             metrics_dump_interval: 15,
+            origin: "external".to_string(),
         }
     }
 }
