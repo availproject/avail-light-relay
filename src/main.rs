@@ -26,7 +26,7 @@ mod server;
 mod telemetry;
 mod types;
 
-const CLIENT_ROLE: &str = "relay_node";
+const CLIENT_ROLE: &str = "relaynode";
 
 #[derive(Debug, Parser)]
 #[clap(name = "Avail Relay Server")]
