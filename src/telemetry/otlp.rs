@@ -22,7 +22,7 @@ impl Metrics {
             KeyValue::new("peerID", self.peer_id.clone()),
             KeyValue::new("multiaddress", self.multiaddress.read().await.clone()),
             KeyValue::new("ip", self.ip.read().await.clone()),
-            KeyValue::new("role", self.origin.clone()),
+            KeyValue::new("origin", self.origin.clone()),
         ]
     }
 
