@@ -244,6 +244,9 @@ async fn run() -> Result<()> {
                 SwarmEvent::ConnectionEstablished { peer_id, .. } => {
                     info!("Connection established with peer_id: {peer_id}");
                 },
+                SwarmEvent::IncomingConnection { local_addr, .. } => {
+                    info!("Connection incoming with local_addr: {local_addr}");
+                },
 
                 _ => {}
             }
