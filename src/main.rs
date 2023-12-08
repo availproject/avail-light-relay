@@ -241,6 +241,10 @@ async fn run() -> Result<()> {
                     _ => {}
                 },
 
+                SwarmEvent::ConnectionEstablished { peer_id, .. } => {
+                    info!("Connection established with peer_id: {peer_id}");
+                },
+
                 _ => {}
             }
         }
